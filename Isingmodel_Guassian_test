@@ -1,0 +1,149 @@
+# -*- coding: utf-8 -*-
+"""
+Created on Mon Oct  5 12:33:42 2020
+
+Ising model machine learning
+@author: Kesson CHEN
+"""
+import numpy as np
+import cmath
+from scipy import linalg
+from scipy.special import gamma
+from scipy.special import hyp1f1 as M
+def cp(E):
+    E=np.array(E)
+    Z=np.sum(np.exp(-E))
+    P=1/Z*np.exp(-E)
+    return P
+
+def cE(h,j,sigma):
+    E=np.zeros(np.size(sigma,0))
+    h=np.array(h)
+    j=np.array(j)
+    for i in range (0,np.size(sigma,0)):
+        tsigma=np.array(sigma[i,:])
+        t2=np.kron(tsigma,tsigma)
+        t2=t2.reshape(np.size(tsigma),np.size(tsigma))
+        E[i]=-np.sum(h.dot(tsigma))-0.5*np.sum(j*t2)
+    return E
+
+def cfm(P,sigma):
+    sigma_t=np.zeros(np.size(sigma,1))
+    for i in range (0,np.size(sigma,1)):
+        sigma_t[i]=np.sum(P*sigma[:,i])
+    return sigma_t
+
+def csm(P,sigma):
+    sigma_t=np.zeros([np.size(sigma,1),np.size(sigma,1)])
+    for i in range (0,np.size(sigma,1)):
+        for j in range (0,np.size(sigma,1)):
+            sigma_t[i,j]=np.sum(P*sigma[:,i]*sigma[:,j])
+    return sigma_t
+
+def ctm(P,sigma):
+    sigma_t=np.zeros([np.size(sigma,1),np.size(sigma,1),np.size(sigma,1)])
+    for i in range (0,np.size(sigma,1)):
+        for j in range (0,np.size(sigma,1)):
+            for k in range (0,np.size(sigma,1)):
+                sigma_t[i,j,k]=np.sum(P*sigma[:,i]*sigma[:,j]*sigma[:,k])
+    return sigma_t
+
+def cqm(P,sigma):
+    sigma_t=np.zeros([np.size(sigma,1),np.size(sigma,1),np.size(sigma,1),np.size(sigma,1)])
+    for i in range (0,np.size(sigma,1)):
+        for j in range (0,np.size(sigma,1)):
+            for k in range (0,np.size(sigma,1)):
+                for l in range (0,np.size(sigma,1)):
+                    sigma_t[i,j,k,l]=np.sum(P*sigma[:,i]*sigma[:,j]*sigma[:,k]*sigma[:,l])
+    return sigma_t
+
+def Htfi(h,n):
+    paulix=np.array([[0,1],[1,0]])
+    pauliz=np.array([[1,0],[0,-1]])
+    H=np.zeros([2**n,2**n])
+    for i in range(n):
+        t=np.kron(np.identity(2**i),paulix)
+        t=np.kron(t,np.identity(2**(n-i-1)))
+        H=H-h*t
+    for i in range(n):
+        for j in range(n):
+            if i==j:
+                t=np.identity(2**n)
+            elif i<j:
+                t=np.kron(np.identity(2**i),pauliz)
+                t=np.kron(t,np.identity(2**(j-i-1)))
+                t=np.kron(t,pauliz)
+                t=np.kron(t,np.identity(2**(n-j-1)))
+            else:
+                t=np.kron(np.identity(2**j),pauliz)
+                t=np.kron(t,np.identity(2**(i-j-1)))
+                t=np.kron(t,pauliz)
+                t=np.kron(t,np.identity(2**(n-i-1)))
+            H=H-t
+    return H
+
+def cq(H,B):
+    Z=np.trace(linalg.expm(-B*H))
+    tho=linalg.expm(-B*H)/Z
+    return tho
+
+def qfm(tho,n):
+    pauliz=np.array([[1,0],[0,-1]])
+    H=np.zeros(n)
+    for i in range(n):
+        t=np.kron(np.identity(2**i),pauliz)
+        t=np.kron(t,np.identity(2**(n-i-1)))
+        H[i]=np.trace(tho.dot(t))   
+    return H
+
+def qsm(tho,n):
+    pauliz=np.array([[1,0],[0,-1]])
+    H=np.zeros([n,n])
+    for i in range(n):
+        for j in range(n):
+            if i==j:
+                t=np.identity(2**n)
+            elif i<j:
+                t=np.kron(np.identity(2**i),pauliz)
+                t=np.kron(t,np.identity(2**(j-i-1)))
+                t=np.kron(t,pauliz)
+                t=np.kron(t,np.identity(2**(n-j-1)))
+            else:
+                t=np.kron(np.identity(2**j),pauliz)
+                t=np.kron(t,np.identity(2**(i-j-1)))
+                t=np.kron(t,pauliz)
+                t=np.kron(t,np.identity(2**(n-i-1))) 
+            H[i,j]=np.trace(tho.dot(t)) 
+    return H
+
+def EP(mu,sigma,p):
+    a=-p/2
+    b=1/2
+    z=-1/2*(mu/sigma)**2
+    c=(sigma**p)*(-1j*np.sqrt(2))**p
+    U=gamma(1-b)/gamma(a+1-b)*M(a,b,z)+gamma(b-1)/gamma(a)*(cmath.sqrt(z))*M(a+1-b,2-b,z)
+    return c*U
+n=7
+sigma=np.zeros([2**n,n])
+for i in range(2**n):
+    x=np.binary_repr(i)
+    x=x.zfill(n)
+    for j in range(n):
+        sigma[i,j]=int(x[j])
+             
+
+E=cE(-0.001,0.001,sigma)
+P=cp(E)
+f=cfm(P,sigma)
+s=csm(P,sigma)
+t=ctm(P,sigma)
+q=cqm(P,sigma)
+sig=np.sqrt(s[1,2]-f[0]**2)
+ET=EP(f[0],sig,3)
+EQ=EP(f[0],sig,4)
+ETD=t[1,2,3]-ET
+EQD=q[1,2,3,4]-EQ
+print('T difference')
+print(ETD)
+print('Q difference')
+print(EQD)
